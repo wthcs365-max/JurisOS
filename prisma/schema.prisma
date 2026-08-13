@@ -1,0 +1,277 @@
+// JURIS OS — data model
+// SQLite for local dev (file: ./dev.db). To move to Postgres later, change the
+// provider below to "postgresql" and point DATABASE_URL at your Postgres
+// instance — everything else in this schema is provider-agnostic.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ── Enums ────────────────────────────────────────────────────────────────────
+
+enum UserRole {
+  ADMIN
+  ATTORNEY
+  CANDIDATE_ATTORNEY
+  PARALEGAL
+  SECRETARY
+}
+
+enum MatterStatus {
+  ACTIVE
+  CLOSED
+}
+
+enum PartyRole {
+  PLAINTIFF
+  DEFENDANT
+  APPLICANT
+  RESPONDENT
+  THIRD_PARTY
+}
+
+enum DocType {
+  PLEADING
+  EVIDENCE
+  CORRESPONDENCE
+}
+
+enum DeadlineStatus {
+  OPEN
+  DONE
+  SNOOZED
+}
+
+enum FilingStatus {
+  DRAFT
+  QUEUED
+  SUBMITTED
+  PROOF_RECEIVED
+}
+
+enum ServiceStatus {
+  ASSIGNED
+  ATTEMPTED
+  SERVED
+}
+
+enum OutboxStatus {
+  QUEUED
+  SENT
+  FAILED
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  DONE
+}
+
+// ── Models ───────────────────────────────────────────────────────────────────
+
+model User {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  role      UserRole @default(ATTORNEY)
+  firmId    String
+  firm      Firm     @relation(fields: [firmId], references: [id])
+  tasks     Task[]
+  timeline  TimelineEvent[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Firm {
+  id                 String   @id @default(cuid())
+  name               String
+  registrationNumber String?
+  vatNumber          String?
+  phone              String?
+  email              String?
+  streetAddress      String?
+  city               String?
+  province           String?
+  postalCode         String?
+  users              User[]
+  matters            Matter[]
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+}
+
+model Matter {
+  id           String         @id @default(cuid())
+  matterNumber String
+  title        String
+  description  String?
+  caseNumber   String?
+  court        String? // e.g. "High Court — Johannesburg" / "Magistrate's Court — Germiston"
+  caseType     String? // e.g. "Civil — Debt Recovery", "Civil — Insolvency"
+  status       MatterStatus  @default(ACTIVE)
+  firmId       String
+  firm         Firm          @relation(fields: [firmId], references: [id])
+  parties      Party[]
+  documents    Document[]
+  deadlines    Deadline[]
+  filings      Filing[]
+  services     Service[]
+  bundles      Bundle[]
+  timeline     TimelineEvent[]
+  tasks        Task[]
+  outbox       Outbox[]
+  openedAt     DateTime      @default(now())
+  closedAt     DateTime?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  @@unique([firmId, matterNumber])
+}
+
+model Party {
+  id        String    @id @default(cuid())
+  matterId  String
+  matter    Matter    @relation(fields: [matterId], references: [id])
+  name      String
+  role      PartyRole @default(PLAINTIFF)
+  isClient  Boolean   @default(false)
+  email     String?
+  phone     String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@index([matterId])
+}
+
+model Document {
+  id          String   @id @default(cuid())
+  matterId    String
+  matter      Matter   @relation(fields: [matterId], references: [id])
+  bundleId    String?
+  bundle      Bundle?  @relation(fields: [bundleId], references: [id])
+  title       String
+  docType     DocType  @default(CORRESPONDENCE)
+  fileName    String?
+  fileUrl     String?
+  version     Int      @default(1)
+  uploadedBy  String?  // user id
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([matterId])
+}
+
+model Deadline {
+  id           String         @id @default(cuid())
+  matterId     String
+  matter       Matter         @relation(fields: [matterId], references: [id])
+  title        String
+  description  String?
+  rule         String? // e.g. "HCR 18(3) — plea within 10 days of notice of intention to defend"
+  dueAt        DateTime
+  status       DeadlineStatus @default(OPEN)
+  completedAt  DateTime?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  @@index([matterId])
+  @@index([dueAt])
+  @@index([status])
+}
+
+model Filing {
+  id           String       @id @default(cuid())
+  matterId     String
+  matter       Matter       @relation(fields: [matterId], references: [id])
+  documentId   String?
+  court        String
+  filingType   String // e.g. "Combined Summons", "Notice of Motion"
+  status       FilingStatus @default(DRAFT)
+  reference    String? // e.g. case number or filing reference once submitted
+  submittedAt  DateTime?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  @@index([matterId])
+}
+
+model Service {
+  id          String        @id @default(cuid())
+  matterId    String
+  matter      Matter        @relation(fields: [matterId], references: [id])
+  documentId  String?
+  sheriff     String? // sheriff's office, e.g. "Sheriff — Johannesburg Central"
+  address     String?
+  status      ServiceStatus @default(ASSIGNED)
+  attemptedAt DateTime?
+  servedAt    DateTime?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@index([matterId])
+}
+
+model Bundle {
+  id          String     @id @default(cuid())
+  matterId    String
+  matter      Matter     @relation(fields: [matterId], references: [id])
+  name        String
+  description String?
+  documents   Document[]
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  @@index([matterId])
+}
+
+model TimelineEvent {
+  id        String   @id @default(cuid())
+  matterId  String
+  matter    Matter   @relation(fields: [matterId], references: [id])
+  eventType String // e.g. "Drafted", "Filed", "Served", "DeadlineAdded", "Pleadings"
+  title     String
+  details   String?
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id])
+  occurredAt DateTime @default(now())
+  createdAt DateTime @default(now())
+
+  @@index([matterId])
+  @@index([occurredAt])
+}
+
+model Outbox {
+  id        String       @id @default(cuid())
+  matterId  String?
+  matter    Matter?      @relation(fields: [matterId], references: [id])
+  action    String // e.g. "EFILE", "SERVE", "EMAIL"
+  target    String // e.g. "eFiling — GDE", "Sheriff — Johannesburg Central"
+  status    OutboxStatus @default(QUEUED)
+  payload   String? // JSON snapshot of the action payload
+  error     String?
+  queuedAt  DateTime     @default(now())
+  sentAt    DateTime?
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+}
+
+model Task {
+  id          String     @id @default(cuid())
+  userId      String?
+  matterId    String?
+  matter      Matter?    @relation(fields: [matterId], references: [id])
+  user        User?      @relation(fields: [userId], references: [id])
+  title       String
+  description String?
+  status      TaskStatus @default(TODO)
+  dueAt       DateTime?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  @@index([userId])
+  @@index([matterId])
+}
