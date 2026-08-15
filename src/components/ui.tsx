@@ -66,11 +66,15 @@ export function Button({
   onClick,
   variant = "primary",
   className = "",
+  type = "button",
+  disabled = false,
 }: {
   children: ReactNode;
   onClick?: () => void;
   variant?: "primary" | "secondary" | "ghost";
   className?: string;
+  type?: "button" | "submit" | "reset";
+  disabled?: boolean;
 }) {
   const variants: Record<string, string> = {
     primary:
@@ -81,9 +85,10 @@ export function Button({
   };
   return (
     <button
-      type="button"
+      type={type}
       onClick={onClick}
-      className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-[13px] font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 ${variants[variant]} ${className}`}
+      disabled={disabled}
+      className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-[13px] font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50 ${variants[variant]} ${className}`}
     >
       {children}
     </button>

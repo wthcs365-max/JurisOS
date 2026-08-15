@@ -80,7 +80,7 @@ function Dashboard() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="secondary" onClick={() => void navigate({ to: "/matters" })}>
+          <Button variant="secondary" onClick={() => void navigate({ to: "/matters", search: { new: true } })}>
             <Icon name="plus" className="h-3.5 w-3.5" />
             Create New Matter
           </Button>
