@@ -112,6 +112,8 @@ model Matter {
   caseNumber   String?
   court        String? // e.g. "High Court — Johannesburg" / "Magistrate's Court — Germiston"
   caseType     String? // e.g. "Civil — Debt Recovery", "Civil — Insolvency"
+  judge        String? // presiding judge or magistrate (once allocated)
+  budget       Int?    // matter budget in ZAR (whole rand)
   status       MatterStatus  @default(ACTIVE)
   firmId       String
   firm         Firm          @relation(fields: [firmId], references: [id])
